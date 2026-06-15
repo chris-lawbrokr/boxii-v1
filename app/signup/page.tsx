@@ -5,8 +5,7 @@ import { AuthCard } from "@/app/ui/auth-card";
 import { SignupForm } from "@/app/ui/signup-form";
 
 export default async function SignupPage() {
-  const user = await getCurrentUser();
-  if (user) redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  if (await getCurrentUser()) redirect("/dashboard");
 
   return (
     <AuthCard

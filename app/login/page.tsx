@@ -5,8 +5,7 @@ import { AuthCard } from "@/app/ui/auth-card";
 import { LoginForm } from "@/app/ui/login-form";
 
 export default async function LoginPage() {
-  const user = await getCurrentUser();
-  if (user) redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  if (await getCurrentUser()) redirect("/dashboard");
 
   return (
     <AuthCard

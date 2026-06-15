@@ -51,9 +51,9 @@ export async function login(_prev: AuthFormState, formData: FormData): Promise<A
 
   await createSession(user);
 
-  // Admins are routed to the console automatically — no separate admin login.
+  // For now every user (admin or customer) lands on the same dashboard.
   // redirect() throws NEXT_REDIRECT — must run outside the try/catch above.
-  redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  redirect("/dashboard");
 }
 
 export async function signup(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {

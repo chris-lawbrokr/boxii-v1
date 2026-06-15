@@ -34,15 +34,9 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const role = await readRole(req);
 
-  // Admin area requires an admin session. Unauthenticated → login;
-  // authenticated non-admins → their dashboard.
-  if (pathname.startsWith("/admin")) {
-    if (role === null) return NextResponse.redirect(new URL("/login", req.url));
-    if (role !== "admin") return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  // Customer dashboard requires any authenticated session.
-  if (pathname.startsWith("/dashboard") && role === null) {
+  // For now /admin and /dashboard both just require an authenticated session
+  // (admins share the dashboard; /admin redirects there).
+  if ((pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) && role === null) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
