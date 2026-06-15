@@ -16,6 +16,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Global "floating curved box" design language:
+   - a curvier radius scale (everything rounds more), and
+   - a soft floating shadow token (`shadow-float`). */
+@theme {
+  --radius-md: 0.3125rem;
+  --radius-lg: 0.4375rem;
+  --radius-xl: 0.5625rem;
+  --radius-2xl: 0.6875rem;
+  --radius-3xl: 0.9375rem;
+
+  --shadow-float: 0 1px 3px rgba(16, 24, 40, 0.05), 0 16px 32px -20px rgba(16, 24, 40, 0.22);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

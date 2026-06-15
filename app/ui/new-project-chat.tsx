@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Loader2, Check, Circle, Search, Sparkles, User } from "lucide-react";
 import { gatherSiteAction, createProjectFromGatherAction } from "@/app/lib/project-actions";
 import type { GatherResult } from "@/app/lib/gather";
 
@@ -97,13 +98,24 @@ export function NewProjectChat() {
       {phase === "scanning" && (
         <Bubble role="assistant">
           <div className="flex items-center gap-2 text-gray-700">
-            <Spinner />
+            <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
             <span>Scanning {hostOf(submittedUrl)}…</span>
           </div>
-          <ul className="mt-2 space-y-1 text-sm text-gray-500">
+          <ul className="mt-2 space-y-1 text-sm">
             {SCAN_STEPS.map((s, i) => (
-              <li key={s} className={i <= scanStep ? "text-gray-700" : "text-gray-300"}>
-                {i < scanStep ? "✓ " : i === scanStep ? "• " : "○ "}
+              <li
+                key={s}
+                className={`flex items-center gap-1.5 ${
+                  i <= scanStep ? "text-gray-700" : "text-gray-300"
+                }`}
+              >
+                {i < scanStep ? (
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                ) : i === scanStep ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" />
+                ) : (
+                  <Circle className="h-3.5 w-3.5" />
+                )}
                 {s}
               </li>
             ))}
@@ -140,8 +152,13 @@ export function NewProjectChat() {
                 type="button"
                 onClick={create}
                 disabled={phase === "creating"}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-60"
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-60"
               >
+                {phase === "creating" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
                 {phase === "creating" ? "Creating…" : "Create project"}
               </button>
               <button
@@ -168,8 +185,9 @@ export function NewProjectChat() {
           />
           <button
             type="submit"
-            className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
           >
+            <Search className="h-4 w-4" />
             Scan site
           </button>
         </form>
@@ -242,11 +260,11 @@ function Bubble({ role, children }: { role: "assistant" | "user"; children: Reac
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
       <div
-        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
           isUser ? "bg-gray-200 text-gray-600" : "bg-indigo-600 text-white"
         }`}
       >
-        {isUser ? "You" : "B"}
+        {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
       </div>
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
@@ -256,12 +274,6 @@ function Bubble({ role, children }: { role: "assistant" | "user"; children: Reac
         {children}
       </div>
     </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />
   );
 }
 
