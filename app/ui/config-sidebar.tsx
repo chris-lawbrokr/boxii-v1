@@ -44,7 +44,6 @@ export async function ConfigSidebar({ id, configId }: { id: string; configId: st
           Widgets
         </h3>
         <WidgetPalette />
-        <p className="mt-2 px-1 text-xs text-gray-400">Drag a widget onto the canvas to place it.</p>
       </div>
     </div>
   );

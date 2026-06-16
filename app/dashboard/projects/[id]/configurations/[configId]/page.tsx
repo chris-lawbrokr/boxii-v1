@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/app/lib/dal";
 import { getConfigurationForUser } from "@/app/lib/db/configurations";
-import { ConfigTitle } from "@/app/ui/config-title";
-import { ConfigCanvas } from "@/app/ui/config-canvas";
+import { ConfigEditor } from "@/app/ui/config-editor";
 import { parseLayout } from "@/app/ui/widget-types";
 
 export default async function ConfigEditorPage({
@@ -19,26 +18,13 @@ export default async function ConfigEditorPage({
   const brandColors = project.brandIdentity?.colors ?? [];
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex justify-start">
-        <ConfigTitle
-          configId={config.id}
-          projectId={project.id}
-          name={config.name}
-          status={config.status}
-        />
-      </div>
-
-      {/* Builder canvas — same 9:16 → 16:9 (1920×1080) convention as the auth card */}
-      <div className="mt-10 flex min-h-0 flex-1 items-center justify-center">
-        <div className="relative mx-auto aspect-[1080/1920] w-full max-w-[min(100%,26rem,calc((100dvh_-_12rem)*9/16))] min-[1080px]:aspect-[1920/1080] min-[1080px]:max-w-[min(100%,64rem,calc((100dvh_-_12rem)*16/9))]">
-          <ConfigCanvas
-            configId={config.id}
-            initialLayout={parseLayout(config.config, brandColors)}
-            brandColors={brandColors}
-          />
-        </div>
-      </div>
-    </div>
+    <ConfigEditor
+      configId={config.id}
+      projectId={project.id}
+      name={config.name}
+      status={config.status}
+      brandColors={brandColors}
+      initialLayout={parseLayout(config.config, brandColors)}
+    />
   );
 }

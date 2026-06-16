@@ -6,13 +6,79 @@ export const CELL_COUNT = GRID_SIZE * GRID_SIZE;
 /** MIME-ish keys used with the native drag-and-drop dataTransfer. */
 export const DND_NEW_WIDGET = "application/x-boxii-widget";
 export const DND_MOVE_CELL = "application/x-boxii-move";
+/** Marker key (no payload) so dragover can tell a 2-cell widget is in flight —
+ *  the dragged value itself is unreadable until drop. */
+export const DND_SPAN2 = "application/x-boxii-span-2";
 
 export type LinkWidget = { type: "link"; label: string; url: string };
+export type TitleWidget = { type: "title"; label: string };
 
-/** Discriminated union — only Link exists today; more widgets land here. */
-export type Widget = LinkWidget;
+/** Discriminated union of every placeable widget. */
+export type Widget = LinkWidget | TitleWidget;
 
 export type WidgetType = Widget["type"];
+
+/** How many grid columns a widget occupies (anchored at its top-left cell). */
+export function widgetSpan(type: WidgetType): number {
+  return type === "title" ? 2 : 1;
+}
+
+export const colOf = (cell: number) => cell % GRID_SIZE;
+export const rowOf = (cell: number) => Math.floor(cell / GRID_SIZE);
+
+/** All cells occupied by the given widgets (anchor + any spanned cells). */
+export function occupancy(cells: Record<number, Widget>): Set<number> {
+  const set = new Set<number>();
+  for (const [key, w] of Object.entries(cells)) {
+    const anchor = Number(key);
+    const span = widgetSpan(w.type);
+    for (let i = 0; i < span && colOf(anchor) + i < GRID_SIZE; i++) set.add(anchor + i);
+  }
+  return set;
+}
+
+/** Pick the anchor cell for dropping a span-`s` widget near `target`, nudging
+ *  left so it never overflows the row. Returns null if it can't fit. */
+export function fitAnchor(
+  cells: Record<number, Widget>,
+  target: number,
+  span: number,
+): number | null {
+  let anchor = target;
+  const overflow = colOf(target) + span - GRID_SIZE;
+  if (overflow > 0) anchor = target - overflow;
+  if (anchor < 0 || rowOf(anchor) !== rowOf(target)) return null;
+  const occ = occupancy(cells);
+  for (let i = 0; i < span; i++) {
+    if (occ.has(anchor + i)) return null;
+  }
+  return anchor;
+}
+
+/** Re-seat widgets so none overflow the grid or overlap — used when loading
+ *  persisted data that may predate the span rules. Processed in index order;
+ *  a widget that can't be re-seated anywhere is dropped. */
+export function normalizeCells(cells: Record<number, Widget>): Record<number, Widget> {
+  const result: Record<number, Widget> = {};
+  const ordered = Object.keys(cells)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  for (const key of ordered) {
+    const w = cells[key];
+    const span = widgetSpan(w.type);
+    // Prefer the original cell (nudged in-row); else scan for the first slot.
+    let anchor = fitAnchor(result, key, span);
+    if (anchor === null) {
+      for (let c = 0; c < CELL_COUNT; c++) {
+        anchor = fitAnchor(result, c, span);
+        if (anchor !== null) break;
+      }
+    }
+    if (anchor !== null) result[anchor] = w;
+  }
+  return result;
+}
 
 /** Per-configuration colour theme. Defaults from the project's brand identity,
  *  but overridable for a specific configuration. */
@@ -83,9 +149,11 @@ export function parseLayout(raw: unknown, brandColors: string[] = []): Layout {
     for (const [key, value] of Object.entries(obj.cells as Record<string, unknown>)) {
       const idx = Number(key);
       if (!Number.isInteger(idx) || idx < 0 || idx >= CELL_COUNT) continue;
-      const w = value as Partial<LinkWidget>;
+      const w = value as { type?: string; label?: unknown; url?: unknown };
       if (w && w.type === "link") {
         cells[idx] = { type: "link", label: String(w.label ?? ""), url: String(w.url ?? "") };
+      } else if (w && w.type === "title") {
+        cells[idx] = { type: "title", label: String(w.label ?? "") };
       }
     }
   }
@@ -97,12 +165,14 @@ export function parseLayout(raw: unknown, brandColors: string[] = []): Layout {
     label: typeof t.label === "string" ? t.label : fallbackTheme.label,
   };
 
-  return { cells, theme };
+  return { cells: normalizeCells(cells), theme };
 }
 
 export function defaultWidget(type: WidgetType): Widget {
   switch (type) {
     case "link":
       return { type: "link", label: "Click here", url: "https://" };
+    case "title":
+      return { type: "title", label: "Your title" };
   }
 }
