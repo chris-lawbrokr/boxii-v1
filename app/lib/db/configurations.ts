@@ -55,6 +55,20 @@ export async function renameConfiguration(
     .where(eq(configurations.id, configId));
 }
 
+export async function saveConfigurationLayout(
+  configId: string,
+  userId: string,
+  config: Record<string, unknown>,
+): Promise<void> {
+  // Only save if the user owns the parent project.
+  const owned = await getConfigurationForUser(configId, userId);
+  if (!owned) return;
+  await requireDb()
+    .update(configurations)
+    .set({ config })
+    .where(eq(configurations.id, configId));
+}
+
 export async function deleteConfiguration(configId: string, userId: string): Promise<void> {
   // Only delete if the user owns the parent project.
   const owned = await getConfigurationForUser(configId, userId);

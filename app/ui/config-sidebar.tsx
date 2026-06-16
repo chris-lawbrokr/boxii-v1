@@ -1,25 +1,11 @@
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Type,
-  Image as ImageIcon,
-  MousePointerClick,
-  TextCursorInput,
-  StretchHorizontal,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/app/lib/dal";
 import { getConfigurationForUser } from "@/app/lib/db/configurations";
-
-const WIDGETS = [
-  { label: "Text", icon: Type, hint: "Headings & body copy" },
-  { label: "Image", icon: ImageIcon, hint: "Logo or hero visual" },
-  { label: "Button", icon: MousePointerClick, hint: "Call to action" },
-  { label: "Form", icon: TextCursorInput, hint: "Capture input" },
-  { label: "Spacer", icon: StretchHorizontal, hint: "Vertical gap" },
-];
+import { WidgetPalette } from "./widget-palette";
 
 /** Sidebar slot inside the configuration editor — a config-specific panel: back
- *  link to Configurations, the config header, and the widget palette/details. */
+ *  link to Configurations, the config header, and the draggable widget palette. */
 export async function ConfigSidebar({ id, configId }: { id: string; configId: string }) {
   const user = await requireUser("/login");
   const found = await getConfigurationForUser(configId, user.id);
@@ -57,23 +43,8 @@ export async function ConfigSidebar({ id, configId }: { id: string; configId: st
         <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
           Widgets
         </h3>
-        <ul className="flex flex-col gap-1.5">
-          {WIDGETS.map((w) => (
-            <li
-              key={w.label}
-              className="flex cursor-not-allowed items-start gap-2.5 rounded-xl border border-dashed border-gray-300 px-3 py-2"
-            >
-              <w.icon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-600">{w.label}</p>
-                <p className="truncate text-xs text-gray-400">{w.hint}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 px-1 text-xs text-gray-400">
-          Drag-and-drop builder coming soon.
-        </p>
+        <WidgetPalette />
+        <p className="mt-2 px-1 text-xs text-gray-400">Drag a widget onto the canvas to place it.</p>
       </div>
     </div>
   );
