@@ -1,11 +1,11 @@
-import { ProjectSidebar } from "@/app/ui/project-sidebar";
+import { ConfigSidebar } from "@/app/ui/config-sidebar";
 
-// Config editor — keep the project sidebar.
+// Config editor — sidebar becomes a configuration-specific panel (widget details).
 export default async function SidebarConfigSlot({
   params,
 }: {
   params: Promise<{ id: string; configId: string }>;
 }) {
-  const { id } = await params;
-  return <ProjectSidebar id={id} />;
+  const { id, configId } = await params;
+  return <ConfigSidebar id={id} configId={configId} />;
 }

@@ -1,17 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Type, Image as ImageIcon, MousePointerClick, TextCursorInput, StretchHorizontal, LayoutTemplate } from "lucide-react";
+import { LayoutTemplate } from "lucide-react";
 import { requireUser } from "@/app/lib/dal";
 import { getConfigurationForUser } from "@/app/lib/db/configurations";
-import { StatusBadge } from "@/app/ui/status-badge";
-
-const WIDGETS = [
-  { label: "Text", icon: Type },
-  { label: "Image", icon: ImageIcon },
-  { label: "Button", icon: MousePointerClick },
-  { label: "Form", icon: TextCursorInput },
-  { label: "Spacer", icon: StretchHorizontal },
-];
+import { ConfigTitle } from "@/app/ui/config-title";
 
 export default async function ConfigEditorPage({
   params,
@@ -26,45 +17,26 @@ export default async function ConfigEditorPage({
   const { config, project } = found;
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <Link
-        href={`/dashboard/projects/${project.id}/configurations`}
-        className="flex w-fit items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Configurations
-      </Link>
-
-      <div className="mt-2 flex items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{config.name}</h1>
-        <StatusBadge status={config.status} />
+    <div className="flex h-full flex-col">
+      <div className="flex justify-start">
+        <ConfigTitle
+          configId={config.id}
+          projectId={project.id}
+          name={config.name}
+          status={config.status}
+        />
       </div>
 
-      {/* Placeholder for the drag-and-drop builder */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-[200px_1fr]">
-        <aside className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Widgets
-          </h2>
-          <ul className="space-y-2">
-            {WIDGETS.map((w) => (
-              <li
-                key={w.label}
-                className="flex cursor-not-allowed items-center gap-2 rounded-md border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-400"
-              >
-                <w.icon className="h-4 w-4" />
-                {w.label}
-              </li>
-            ))}
-          </ul>
-        </aside>
-
-        <div className="flex min-h-80 items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+      {/* Builder canvas — same 9:16 → 16:9 (1920×1080) convention as the auth card */}
+      <div className="mt-6 flex min-h-0 flex-1 items-center justify-center">
+        <div className="relative mx-auto flex aspect-[1080/1920] w-full max-w-[min(100%,26rem,calc((100dvh_-_12rem)*9/16))] items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center min-[1080px]:aspect-[1920/1080] min-[1080px]:max-w-[min(100%,64rem,calc((100dvh_-_12rem)*16/9))]">
           <div>
             <LayoutTemplate className="mx-auto h-8 w-8 text-gray-300" />
-            <p className="mt-2 text-sm font-medium text-gray-900">Drag-and-drop builder coming soon</p>
+            <p className="mt-2 text-sm font-medium text-gray-900">
+              Drag-and-drop builder coming soon
+            </p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
-              This canvas will let you drop widgets to design a popover, pre-styled from{" "}
+              Drag widgets from the panel to design a popover, pre-styled from{" "}
               <span className="font-medium">{project.name}</span>&apos;s gathered brand identity.
             </p>
           </div>

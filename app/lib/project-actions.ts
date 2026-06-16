@@ -16,7 +16,7 @@ import {
   setProjectGathered,
   setProjectStatus,
 } from "./db/projects";
-import { createConfiguration, deleteConfiguration } from "./db/configurations";
+import { createConfiguration, deleteConfiguration, renameConfiguration } from "./db/configurations";
 import { gatherSite, GatherError, type GatherResult } from "./gather";
 
 export type FormState = { error?: string } | undefined;
@@ -105,6 +105,17 @@ export async function createConfigurationAction(
   const name = String(formData.get("name") ?? "").trim() || "Untitled configuration";
   const config = await createConfiguration({ projectId, name });
   redirect(`/dashboard/projects/${projectId}/configurations/${config.id}`);
+}
+
+export async function renameConfigurationAction(
+  configId: string,
+  projectId: string,
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+  if (name) await renameConfiguration(configId, user.id, name);
+  revalidatePath(`/dashboard/projects/${projectId}/configurations/${configId}`);
 }
 
 export async function deleteConfigurationAction(
