@@ -50,7 +50,7 @@ export default async function BrandDetailsTab({ params }: { params: Promise<{ id
   const brand = project.brandIdentity;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="flex h-full flex-col">
       <h1 className="text-2xl font-semibold tracking-tight">Brand details</h1>
       <p className="mt-1 text-sm text-gray-500">
         Gathered from{" "}
@@ -65,15 +65,16 @@ export default async function BrandDetailsTab({ params }: { params: Promise<{ id
         .
       </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <Panel title="Brand identity">
+      <div className="mt-6 grid min-h-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-3 sm:grid-rows-2">
+        <Tile className="sm:col-span-2">
+          <SectionHeading>Brand identity</SectionHeading>
           {brand && (brand.colors.length > 0 || brand.fonts.length > 0 || brand.voice) ? (
-            <div className="space-y-3">
-              <div className="flex flex-col gap-1.5">
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-3">
                 {brand.colors.map((c) => (
                   <div key={c} className="flex items-center gap-2 text-xs text-gray-600">
                     <span
-                      className="h-4 w-4 shrink-0 rounded border border-gray-200"
+                      className="h-6 w-6 shrink-0 rounded border border-gray-200"
                       style={{ backgroundColor: c }}
                     />
                     <span className="font-mono">{c}</span>
@@ -94,9 +95,10 @@ export default async function BrandDetailsTab({ params }: { params: Promise<{ id
           ) : (
             <p className="text-sm text-gray-400">No brand identity gathered.</p>
           )}
-        </Panel>
+        </Tile>
 
-        <Panel title="Site map">
+        <Tile className="sm:row-span-2">
+          <SectionHeading>Site map</SectionHeading>
           {project.siteMap && project.siteMap.length > 0 ? (
             <ul className="space-y-2">
               {project.siteMap.map((entry) => (
@@ -116,29 +118,27 @@ export default async function BrandDetailsTab({ params }: { params: Promise<{ id
           ) : (
             <p className="text-sm text-gray-400">No pages gathered.</p>
           )}
-        </Panel>
-      </div>
+        </Tile>
 
-      <Panel title="Summary & objective" className="mt-4">
-        <p className="text-sm leading-relaxed text-gray-600">{project.summary}</p>
-      </Panel>
+        <Tile className="sm:col-span-2">
+          <SectionHeading>Summary &amp; objective</SectionHeading>
+          <p className="text-sm leading-relaxed text-gray-600">{project.summary}</p>
+        </Tile>
+      </div>
     </div>
   );
 }
 
-function Panel({
-  title,
-  children,
-  className = "",
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Tile({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-gray-200/80 bg-white p-5 shadow-float ${className}`}>
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+    <div className={`min-h-0 overflow-y-auto rounded-2xl bg-gray-50/70 p-5 ring-1 ring-gray-200/70 ${className}`}>
       {children}
     </div>
+  );
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">{children}</h3>
   );
 }
