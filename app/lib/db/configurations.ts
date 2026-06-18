@@ -41,6 +41,21 @@ export async function getConfigurationForUser(
   return rows[0] ?? null;
 }
 
+/** Fetch a PUBLISHED configuration plus its project, for the public embed.
+ *  No user scoping — published configurations are meant to be served to any
+ *  host site. Drafts are never exposed here. */
+export async function getPublishedConfiguration(
+  configId: string,
+): Promise<{ config: ConfigurationRow; project: ProjectRow } | null> {
+  const rows = await requireDb()
+    .select({ config: configurations, project: projects })
+    .from(configurations)
+    .innerJoin(projects, eq(configurations.projectId, projects.id))
+    .where(and(eq(configurations.id, configId), eq(configurations.status, "published")))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function renameConfiguration(
   configId: string,
   userId: string,

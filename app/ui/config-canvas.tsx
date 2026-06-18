@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link2, Heading, Pencil, Trash2, Check, ExternalLink, Palette } from "lucide-react";
 import { saveConfigLayoutAction } from "@/app/lib/project-actions";
+import { PopoverPreview } from "./popover-preview";
 import {
   CELL_COUNT,
   DND_MOVE_CELL,
@@ -14,9 +15,11 @@ import {
   fitAnchor,
   defaultWidget,
   widgetSpan,
+  backgroundCss,
+  PATTERNS,
+  type BgStyle,
   type Layout,
   type Theme,
-  type Widget,
   type WidgetType,
 } from "./widget-types";
 
@@ -59,7 +62,6 @@ export function ConfigCanvas({
     setLayout((prev) => {
       const anchor = fitAnchor(prev.cells, cell, widgetSpan(type));
       if (anchor === null) return prev; // doesn't fit here
-      setTimeout(() => setSelected(anchor), 0);
       return { ...prev, cells: { ...prev.cells, [anchor]: defaultWidget(type) } };
     });
   }, []);
@@ -74,7 +76,6 @@ export function ConfigCanvas({
       const anchor = fitAnchor(cells, to, widgetSpan(moving.type));
       if (anchor === null) return prev; // no room — leave it where it was
       cells[anchor] = moving;
-      setTimeout(() => setSelected(anchor), 0);
       return { ...prev, cells };
     });
   }, []);
@@ -170,98 +171,104 @@ export function ConfigCanvas({
         />
       )}
 
-      {/* The popover canvas — white background; brand colours live on the widgets */}
-      <div
-        className={`grid h-full w-full gap-2 rounded-2xl bg-white p-3 ${
-          preview ? "border border-gray-200 shadow-float" : "border-2 border-dashed border-gray-300"
-        }`}
-        style={{
-          gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
-        }}
-        onClick={() => !preview && setSelected(null)}
-        onDragLeave={(e) => {
-          // Clear only when the cursor actually leaves the grid, not on inner moves.
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragCells([]);
-        }}
-      >
-        {Array.from({ length: CELL_COUNT }, (_, cell) => {
-          const widget = layout.cells[cell];
-          // Skip cells covered by a spanning widget anchored to their left.
-          if (!widget && covered.has(cell)) return null;
-          // In preview, empty cells render nothing at all.
-          if (preview && !widget) return null;
+      {/* Preview renders the REAL shippable Lit <boxii-popover> element, so what
+          you preview is exactly what the embed ships. Edit mode keeps a React
+          grid for drag-and-drop authoring. */}
+      {preview ? (
+        <PopoverPreview layout={layout} />
+      ) : (
+        <div
+          className="grid h-full w-full gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white p-3"
+          style={{
+            gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
+          }}
+          onClick={() => setSelected(null)}
+          onDragLeave={(e) => {
+            // Clear only when the cursor actually leaves the grid, not on inner moves.
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragCells([]);
+          }}
+        >
+          {Array.from({ length: CELL_COUNT }, (_, cell) => {
+            const widget = layout.cells[cell];
+            // Skip cells covered by a spanning widget anchored to their left.
+            if (!widget && covered.has(cell)) return null;
 
-          const isOver = dragCells.includes(cell);
-          // Clamp so a widget never spills past the last column (safety net).
-          const span = Math.min(widget ? widgetSpan(widget.type) : 1, GRID_SIZE - colOf(cell));
-          const cellStyle = {
-            gridColumn: `${colOf(cell) + 1} / span ${span}`,
-            gridRow: `${rowOf(cell) + 1}`,
-          };
+            const isOver = dragCells.includes(cell);
+            // Clamp so a widget never spills past the last column (safety net).
+            const span = Math.min(widget ? widgetSpan(widget.type) : 1, GRID_SIZE - colOf(cell));
+            const cellStyle = {
+              gridColumn: `${colOf(cell) + 1} / span ${span}`,
+              gridRow: `${rowOf(cell) + 1}`,
+            };
 
-          if (preview && widget) {
             return (
-              <PreviewWidget
+              <div
                 key={cell}
-                widget={widget}
-                button={theme.button}
-                label={theme.label}
+                onDragOver={onDragOverCell(cell)}
+                onDrop={onDropCell(cell)}
                 style={cellStyle}
-              />
-            );
-          }
+                className={`rounded-xl transition ${
+                  widget
+                    ? ""
+                    : isOver
+                      ? "border-2 border-dashed border-indigo-400 bg-indigo-50"
+                      : "border border-dashed border-gray-200"
+                }`}
+              >
+                {widget && (
+                  <div
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(DND_MOVE_CELL, String(cell));
+                      if (widgetSpan(widget.type) === 2) e.dataTransfer.setData(DND_SPAN2, "");
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    style={{ backgroundColor: theme.button, color: theme.label }}
+                    className={`group relative flex h-full w-full cursor-grab flex-col items-center justify-center gap-1.5 rounded-xl p-2 text-center shadow-sm active:cursor-grabbing ${
+                      selected === cell ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-white" : ""
+                    } ${widget.type === "title" ? "text-xl font-bold" : "text-sm font-semibold"}`}
+                  >
+                    {/* Edit control — revealed on hover. The edit popup opens only
+                        when the user clicks the pencil, not on a plain click of the
+                        widget. Deletion lives inside the edit card. */}
+                    <div
+                      className={`absolute right-1 top-1 z-10 flex gap-1 transition-opacity group-hover:opacity-100 ${
+                        selected === cell ? "opacity-100" : "opacity-0"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Edit widget"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelected(cell);
+                        }}
+                        className="rounded-md bg-white/90 p-1 text-gray-600 shadow-sm backdrop-blur hover:bg-white hover:text-indigo-600"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </div>
 
-          return (
-            <div
-              key={cell}
-              onDragOver={onDragOverCell(cell)}
-              onDrop={onDropCell(cell)}
-              style={cellStyle}
-              className={`rounded-xl transition ${
-                widget
-                  ? ""
-                  : isOver
-                    ? "border-2 border-dashed border-indigo-400 bg-indigo-50"
-                    : "border border-dashed border-gray-200"
-              }`}
-            >
-              {widget && (
-                <button
-                  type="button"
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData(DND_MOVE_CELL, String(cell));
-                    if (widgetSpan(widget.type) === 2) e.dataTransfer.setData(DND_SPAN2, "");
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelected(cell);
-                  }}
-                  style={{ backgroundColor: theme.button, color: theme.label }}
-                  className={`flex h-full w-full cursor-grab flex-col items-center justify-center gap-1.5 rounded-xl p-2 text-center shadow-sm active:cursor-grabbing ${
-                    selected === cell ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-white" : ""
-                  } ${widget.type === "title" ? "text-xl font-bold" : "text-sm font-semibold"}`}
-                >
-                  {widget.type === "link" ? (
-                    <>
-                      <Link2 className="h-4 w-4 shrink-0 opacity-80" />
+                    {widget.type === "link" ? (
+                      <>
+                        <Link2 className="h-4 w-4 shrink-0 opacity-80" />
+                        <span className="line-clamp-2 break-words leading-tight">
+                          {widget.label || "Link"}
+                        </span>
+                      </>
+                    ) : (
                       <span className="line-clamp-2 break-words leading-tight">
-                        {widget.label || "Link"}
+                        {widget.label || "Your title"}
                       </span>
-                    </>
-                  ) : (
-                    <span className="line-clamp-2 break-words leading-tight">
-                      {widget.label || "Your title"}
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {!preview && selected !== null && selectedWidget?.type === "link" && (
         <LinkEditor
@@ -297,9 +304,10 @@ function ThemeEditor({
   onChange: (patch: Partial<Theme>) => void;
   onClose: () => void;
 }) {
-  const rows: { key: keyof Theme; label: string }[] = [
-    { key: "button", label: "Button" },
-    { key: "label", label: "Text" },
+  const bgStyles: { id: BgStyle; label: string }[] = [
+    { id: "solid", label: "Solid" },
+    { id: "gradient", label: "Gradient" },
+    { id: "pattern", label: "Pattern" },
   ];
 
   return (
@@ -320,78 +328,166 @@ function ThemeEditor({
       </div>
       <p className="mt-1 text-xs text-gray-400">Defaults to this site&apos;s brand colours.</p>
 
-      {rows.map((row) => (
-        <div key={row.key} className="mt-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-600">{row.label}</span>
-            <label className="flex items-center gap-1.5">
-              <span className="font-mono text-[11px] text-gray-400">{theme[row.key]}</span>
-              <input
-                type="color"
-                value={normalizeHex(theme[row.key])}
-                onChange={(e) => onChange({ [row.key]: e.target.value } as Partial<Theme>)}
-                className="h-5 w-5 cursor-pointer rounded border border-gray-200 bg-transparent p-0"
-                aria-label={`${row.label} colour`}
-              />
-            </label>
-          </div>
-          {brandColors.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {brandColors.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => onChange({ [row.key]: c } as Partial<Theme>)}
-                  aria-label={`Use ${c}`}
-                  style={{ backgroundColor: c }}
-                  className={`h-5 w-5 rounded border ${
-                    theme[row.key].toLowerCase() === c.toLowerCase()
-                      ? "border-gray-900 ring-1 ring-gray-900"
-                      : "border-gray-200"
-                  }`}
-                />
-              ))}
-            </div>
-          )}
+      {/* ---- Background ---- */}
+      <div className="mt-3 border-t border-gray-100 pt-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Background
+          </span>
+          {/* Live preview of the chosen background */}
+          <span
+            className="h-6 w-12 rounded-md border border-gray-200"
+            style={cssTextToStyle(backgroundCss(theme))}
+            aria-hidden
+          />
         </div>
-      ))}
+
+        {/* Style toggle: solid / gradient / pattern */}
+        <div className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-0.5">
+          {bgStyles.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onChange({ bgStyle: s.id })}
+              className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                theme.bgStyle === s.id
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-800"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        <ColorRow
+          label={theme.bgStyle === "solid" ? "Colour" : "Base"}
+          colorKey="canvas"
+          theme={theme}
+          brandColors={brandColors}
+          onChange={onChange}
+        />
+        {theme.bgStyle !== "solid" && (
+          <ColorRow
+            label={theme.bgStyle === "gradient" ? "Gradient to" : "Pattern"}
+            colorKey="canvas2"
+            theme={theme}
+            brandColors={brandColors}
+            onChange={onChange}
+          />
+        )}
+
+        {theme.bgStyle === "pattern" && (
+          <div className="mt-2 grid grid-cols-4 gap-1.5">
+            {PATTERNS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onChange({ pattern: p })}
+                aria-label={`${p} pattern`}
+                title={p}
+                style={cssTextToStyle(
+                  backgroundCss({ ...theme, bgStyle: "pattern", pattern: p }),
+                )}
+                className={`h-8 rounded-md border ${
+                  theme.pattern === p
+                    ? "border-gray-900 ring-1 ring-gray-900"
+                    : "border-gray-200"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ---- Widgets ---- */}
+      <div className="mt-3 border-t border-gray-100 pt-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Widgets</span>
+        <ColorRow
+          label="Button"
+          colorKey="button"
+          theme={theme}
+          brandColors={brandColors}
+          onChange={onChange}
+        />
+        <ColorRow
+          label="Text"
+          colorKey="label"
+          theme={theme}
+          brandColors={brandColors}
+          onChange={onChange}
+        />
+      </div>
     </div>
   );
 }
 
-/** A widget as it appears in the live popover (preview mode) — links are real,
- *  clickable anchors; titles are plain headings. No edit affordances. */
-function PreviewWidget({
-  widget,
-  button,
-  label,
-  style,
-}: {
-  widget: Widget;
-  button: string;
-  label: string;
-  style: React.CSSProperties;
-}) {
-  if (widget.type === "link") {
-    return (
-      <a
-        href={widget.url || "#"}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ ...style, backgroundColor: button, color: label }}
-        className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl p-2 text-center text-sm font-semibold shadow-sm transition hover:opacity-90"
-      >
-        <Link2 className="h-4 w-4 shrink-0 opacity-80" />
-        <span className="line-clamp-2 break-words leading-tight">{widget.label || "Link"}</span>
-      </a>
-    );
+/** Convert a CSS-text declaration string (e.g. "background:#fff;") into a React
+ *  style object so editor swatches reuse the exact same paint as the widget. */
+function cssTextToStyle(cssText: string): React.CSSProperties {
+  const style: Record<string, string> = {};
+  for (const decl of cssText.split(";")) {
+    const idx = decl.indexOf(":");
+    if (idx === -1) continue;
+    const prop = decl.slice(0, idx).trim();
+    const value = decl.slice(idx + 1).trim();
+    if (!prop) continue;
+    // camelCase the CSS property for React.
+    const camel = prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+    style[camel] = value;
   }
+  return style as React.CSSProperties;
+}
+
+/** A single colour control: hex picker + brand-palette swatches, bound to one
+ *  Theme colour key. */
+function ColorRow({
+  label,
+  colorKey,
+  theme,
+  brandColors,
+  onChange,
+}: {
+  label: string;
+  colorKey: "canvas" | "canvas2" | "button" | "label";
+  theme: Theme;
+  brandColors: string[];
+  onChange: (patch: Partial<Theme>) => void;
+}) {
+  const value = theme[colorKey];
   return (
-    <div
-      style={{ ...style, backgroundColor: button, color: label }}
-      className="flex h-full w-full items-center justify-center rounded-xl p-2 text-center text-xl font-bold shadow-sm"
-    >
-      <span className="line-clamp-2 break-words leading-tight">{widget.label || "Your title"}</span>
+    <div className="mt-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-600">{label}</span>
+        <label className="flex items-center gap-1.5">
+          <span className="font-mono text-[11px] text-gray-400">{value}</span>
+          <input
+            type="color"
+            value={normalizeHex(value)}
+            onChange={(e) => onChange({ [colorKey]: e.target.value })}
+            className="h-5 w-5 cursor-pointer rounded border border-gray-200 bg-transparent p-0"
+            aria-label={`${label} colour`}
+          />
+        </label>
+      </div>
+      {brandColors.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {brandColors.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => onChange({ [colorKey]: c })}
+              aria-label={`Use ${c}`}
+              style={{ backgroundColor: c }}
+              className={`h-5 w-5 rounded border ${
+                value.toLowerCase() === c.toLowerCase()
+                  ? "border-gray-900 ring-1 ring-gray-900"
+                  : "border-gray-200"
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -399,6 +495,46 @@ function PreviewWidget({
 /** <input type=color> needs a #rrggbb value; coerce anything else to black. */
 function normalizeHex(hex: string): string {
   return /^#[0-9a-f]{6}$/i.test(hex.trim()) ? hex.trim() : "#000000";
+}
+
+/** Small trash icon (sits in an edit card's header beside Done) that asks for
+ *  confirmation in a little popover before firing `onRemove`. */
+function DeleteWithConfirm({ onRemove }: { onRemove: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-label="Delete widget"
+        onClick={() => setConfirming((v) => !v)}
+        className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+      {confirming && (
+        <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-2 shadow-float">
+          <p className="text-xs text-gray-600">Delete this widget?</p>
+          <div className="mt-2 flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TitleEditor({
@@ -413,21 +549,14 @@ function TitleEditor({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute left-1/2 top-2 z-10 w-72 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-3 shadow-float">
+    <div className="absolute left-1/2 top-1/2 z-10 w-72 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-200 bg-white p-3 shadow-float">
       <div className="flex items-center justify-between">
         <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
           <Heading className="h-3.5 w-3.5" />
           Title
         </h4>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label="Delete widget"
-            onClick={onRemove}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <DeleteWithConfirm onRemove={onRemove} />
           <button
             type="button"
             aria-label="Done"
@@ -468,7 +597,7 @@ function LinkEditor({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute left-1/2 top-2 z-10 w-72 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-3 shadow-float">
+    <div className="absolute left-1/2 top-1/2 z-10 w-72 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-200 bg-white p-3 shadow-float">
       <div className="flex items-center justify-between">
         <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
           <Link2 className="h-3.5 w-3.5" />
@@ -486,14 +615,7 @@ function LinkEditor({
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
-          <button
-            type="button"
-            aria-label="Delete widget"
-            onClick={onRemove}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <DeleteWithConfirm onRemove={onRemove} />
           <button
             type="button"
             aria-label="Done"

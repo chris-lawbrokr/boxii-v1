@@ -80,13 +80,54 @@ export function normalizeCells(cells: Record<number, Widget>): Record<number, Wi
   return result;
 }
 
+/** How the popover background is painted. */
+export type BgStyle = "solid" | "gradient" | "pattern";
+
+/** Available repeating background patterns (drawn with CSS gradients). */
+export type PatternId = "dots" | "grid" | "stripes" | "checks";
+
+export const PATTERNS: PatternId[] = ["dots", "grid", "stripes", "checks"];
+
 /** Per-configuration colour theme. Defaults from the project's brand identity,
  *  but overridable for a specific configuration. */
 export type Theme = {
-  canvas: string; // popover background
+  canvas: string; // popover background — base / first gradient stop
+  canvas2: string; // second gradient stop / pattern accent colour
+  bgStyle: BgStyle; // how the background is painted
+  pattern: PatternId; // which pattern when bgStyle === "pattern"
   button: string; // widget/button fill
   label: string; // widget/button text
 };
+
+/** CSS for a pattern: a `canvas` base painted with a repeating `accent` motif. */
+function patternCss(pattern: PatternId, base: string, accent: string): string {
+  switch (pattern) {
+    case "grid":
+      return `background-color:${base};background-image:linear-gradient(${accent} 1px,transparent 1px),linear-gradient(90deg,${accent} 1px,transparent 1px);background-size:22px 22px;`;
+    case "stripes":
+      return `background-color:${base};background-image:repeating-linear-gradient(45deg,${accent} 0,${accent} 2px,transparent 2px,transparent 14px);`;
+    case "checks":
+      return `background-color:${base};background-image:linear-gradient(45deg,${accent} 25%,transparent 25%,transparent 75%,${accent} 75%),linear-gradient(45deg,${accent} 25%,transparent 25%,transparent 75%,${accent} 75%);background-size:24px 24px;background-position:0 0,12px 12px;`;
+    case "dots":
+    default:
+      return `background-color:${base};background-image:radial-gradient(${accent} 1.6px,transparent 1.6px);background-size:16px 16px;`;
+  }
+}
+
+/** Build the inline-style declaration(s) that paint a theme's background.
+ *  Shared by the live <boxii-popover> element and the editor's preview swatches
+ *  so every surface renders the background identically. */
+export function backgroundCss(theme: Theme): string {
+  switch (theme.bgStyle) {
+    case "gradient":
+      return `background:linear-gradient(135deg,${theme.canvas},${theme.canvas2});`;
+    case "pattern":
+      return patternCss(theme.pattern, theme.canvas, theme.canvas2);
+    case "solid":
+    default:
+      return `background:${theme.canvas};`;
+  }
+}
 
 /** Persisted layout: a map of cell index (0-15) → widget, plus a theme. */
 export type Layout = { cells: Record<number, Widget>; theme: Theme };
@@ -114,7 +155,15 @@ export function defaultTheme(brandColors: string[]): Theme {
   const sorted = [...colors];
   const dark = pickByLuminance(colors, "dark") ?? colors[0];
   const accent = colors.find((c) => c.toLowerCase() !== dark.toLowerCase()) ?? sorted[1] ?? dark;
-  return { canvas: dark, button: accent, label: contrastText(accent) };
+  const light = pickByLuminance(colors, "light") ?? "#ffffff";
+  return {
+    canvas: dark,
+    canvas2: light.toLowerCase() === dark.toLowerCase() ? "#ffffff" : light,
+    bgStyle: "solid",
+    pattern: "dots",
+    button: accent,
+    label: contrastText(accent),
+  };
 }
 
 function pickByLuminance(colors: string[], want: "dark" | "light"): string | undefined {
@@ -159,8 +208,16 @@ export function parseLayout(raw: unknown, brandColors: string[] = []): Layout {
   }
 
   const t = (obj.theme ?? {}) as Partial<Theme>;
+  const bgStyle: BgStyle =
+    t.bgStyle === "gradient" || t.bgStyle === "pattern" ? t.bgStyle : "solid";
+  const pattern: PatternId = PATTERNS.includes(t.pattern as PatternId)
+    ? (t.pattern as PatternId)
+    : "dots";
   const theme: Theme = {
     canvas: typeof t.canvas === "string" ? t.canvas : fallbackTheme.canvas,
+    canvas2: typeof t.canvas2 === "string" ? t.canvas2 : fallbackTheme.canvas2,
+    bgStyle,
+    pattern,
     button: typeof t.button === "string" ? t.button : fallbackTheme.button,
     label: typeof t.label === "string" ? t.label : fallbackTheme.label,
   };
