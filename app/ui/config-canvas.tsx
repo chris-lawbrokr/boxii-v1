@@ -1,7 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link2, Heading, Pencil, Trash2, Check, ExternalLink, Palette } from "lucide-react";
+import {
+  Link2,
+  Heading,
+  Pencil,
+  Trash2,
+  Check,
+  ExternalLink,
+  Palette,
+  Type,
+  Image as ImageIcon,
+  Video,
+  ArrowUpRight,
+} from "lucide-react";
 import { saveConfigLayoutAction } from "@/app/lib/project-actions";
 import { PopoverPreview } from "./popover-preview";
 import {
@@ -16,10 +28,12 @@ import {
   defaultWidget,
   widgetSpan,
   backgroundCss,
+  contrastText,
   PATTERNS,
   type BgStyle,
   type Layout,
   type Theme,
+  type Widget,
   type WidgetType,
 } from "./widget-types";
 
@@ -81,7 +95,10 @@ export function ConfigCanvas({
   }, []);
 
   const updateWidget = useCallback(
-    (cell: number, patch: Partial<{ label: string; url: string }>) => {
+    (
+      cell: number,
+      patch: Partial<{ label: string; url: string; subtitle: string; text: string; alt: string }>,
+    ) => {
       setLayout((prev) => {
         const existing = prev.cells[cell];
         if (!existing) return prev;
@@ -131,6 +148,11 @@ export function ConfigCanvas({
   };
 
   const { theme } = layout;
+  // Readable colour for content sitting directly on the canvas (light text on a
+  // dark canvas, dark text on a light one). Drives the frosted-glass card tints.
+  const onCanvas = contrastText(theme.canvas);
+  const glassBg = `color-mix(in srgb, ${onCanvas} 8%, transparent)`;
+  const glassBorder = `color-mix(in srgb, ${onCanvas} 16%, transparent)`;
 
   // Cells hidden because a spanning widget to their left covers them.
   const covered = new Set<number>();
@@ -178,8 +200,9 @@ export function ConfigCanvas({
         <PopoverPreview layout={layout} />
       ) : (
         <div
-          className="grid h-full w-full gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white p-3"
+          className="grid h-full w-full gap-2 rounded-3xl border border-black/5 p-3 shadow-float"
           style={{
+            ...cssTextToStyle(backgroundCss(theme)),
             gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
           }}
@@ -207,13 +230,17 @@ export function ConfigCanvas({
                 key={cell}
                 onDragOver={onDragOverCell(cell)}
                 onDrop={onDropCell(cell)}
-                style={cellStyle}
-                className={`rounded-xl transition ${
+                style={
+                  widget || isOver
+                    ? cellStyle
+                    : { ...cellStyle, borderColor: glassBorder }
+                }
+                className={`rounded-2xl transition ${
                   widget
                     ? ""
                     : isOver
-                      ? "border-2 border-dashed border-indigo-400 bg-indigo-50"
-                      : "border border-dashed border-gray-200"
+                      ? "border-2 border-dashed border-indigo-300 bg-white/10"
+                      : "border border-dashed"
                 }`}
               >
                 {widget && (
@@ -224,10 +251,14 @@ export function ConfigCanvas({
                       if (widgetSpan(widget.type) === 2) e.dataTransfer.setData(DND_SPAN2, "");
                       e.dataTransfer.effectAllowed = "move";
                     }}
-                    style={{ backgroundColor: theme.button, color: theme.label }}
-                    className={`group relative flex h-full w-full cursor-grab flex-col items-center justify-center gap-1.5 rounded-xl p-2 text-center shadow-sm active:cursor-grabbing ${
+                    style={
+                      widget.type === "image" || widget.type === "video"
+                        ? { color: onCanvas, borderColor: glassBorder }
+                        : { background: glassBg, color: onCanvas, borderColor: glassBorder }
+                    }
+                    className={`group relative flex h-full w-full cursor-grab flex-col items-start justify-center gap-1 overflow-hidden rounded-2xl border p-3 text-left backdrop-blur-md transition active:cursor-grabbing ${
                       selected === cell ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-white" : ""
-                    } ${widget.type === "title" ? "text-xl font-bold" : "text-sm font-semibold"}`}
+                    }`}
                   >
                     {/* Edit control — revealed on hover. The edit popup opens only
                         when the user clicks the pencil, not on a plain click of the
@@ -250,18 +281,7 @@ export function ConfigCanvas({
                       </button>
                     </div>
 
-                    {widget.type === "link" ? (
-                      <>
-                        <Link2 className="h-4 w-4 shrink-0 opacity-80" />
-                        <span className="line-clamp-2 break-words leading-tight">
-                          {widget.label || "Link"}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="line-clamp-2 break-words leading-tight">
-                        {widget.label || "Your title"}
-                      </span>
-                    )}
+                    <WidgetCellBody widget={widget} />
                   </div>
                 )}
               </div>
@@ -289,8 +309,98 @@ export function ConfigCanvas({
           onClose={() => setSelected(null)}
         />
       )}
+
+      {!preview && selected !== null && selectedWidget?.type === "text" && (
+        <TextEditor
+          key={selected}
+          widget={selectedWidget}
+          onChange={(patch) => updateWidget(selected, patch)}
+          onRemove={() => removeWidget(selected)}
+          onClose={() => setSelected(null)}
+        />
+      )}
+
+      {!preview && selected !== null && selectedWidget?.type === "image" && (
+        <ImageEditor
+          key={selected}
+          widget={selectedWidget}
+          onChange={(patch) => updateWidget(selected, patch)}
+          onRemove={() => removeWidget(selected)}
+          onClose={() => setSelected(null)}
+        />
+      )}
+
+      {!preview && selected !== null && selectedWidget?.type === "video" && (
+        <VideoEditor
+          key={selected}
+          widget={selectedWidget}
+          onChange={(patch) => updateWidget(selected, patch)}
+          onRemove={() => removeWidget(selected)}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
+}
+
+/** Renders the contents of a widget inside an editor grid cell. The shipping
+ *  popover renders the same widgets via <boxii-popover>; this is the authoring
+ *  mirror. */
+function WidgetCellBody({ widget }: { widget: Widget }) {
+  switch (widget.type) {
+    case "link":
+      return (
+        <div className="flex w-full items-center justify-between gap-2">
+          <span className="line-clamp-2 break-words text-sm font-semibold leading-tight">
+            {widget.label || "Link"}
+          </span>
+          <ArrowUpRight className="h-4 w-4 shrink-0 opacity-70" />
+        </div>
+      );
+    case "title":
+      return (
+        <>
+          <span className="line-clamp-2 break-words font-serif text-2xl font-semibold leading-tight tracking-tight">
+            {widget.label || "Your title"}
+          </span>
+          {widget.subtitle && (
+            <span className="line-clamp-2 break-words text-xs font-normal leading-snug opacity-70">
+              {widget.subtitle}
+            </span>
+          )}
+        </>
+      );
+    case "text":
+      return (
+        <span className="line-clamp-4 whitespace-pre-wrap break-words text-xs font-normal leading-snug opacity-85">
+          {widget.text || "Add some text here."}
+        </span>
+      );
+    case "image":
+      return widget.url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- arbitrary user URL, not a Next asset
+        <img
+          src={widget.url}
+          alt={widget.alt}
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+          <ImageIcon className="h-5 w-5 opacity-70" />
+          <span className="text-xs font-medium opacity-70">Image</span>
+        </div>
+      );
+    case "video":
+      return (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+          <Video className="h-5 w-5 opacity-70" />
+          <span className="line-clamp-1 break-all text-xs font-medium opacity-70">
+            {widget.url ? "Video" : "Add a video URL"}
+          </span>
+        </div>
+      );
+  }
 }
 
 function ThemeEditor({
@@ -543,8 +653,8 @@ function TitleEditor({
   onRemove,
   onClose,
 }: {
-  widget: { label: string };
-  onChange: (patch: { label: string }) => void;
+  widget: { label: string; subtitle: string };
+  onChange: (patch: Partial<{ label: string; subtitle: string }>) => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
@@ -571,7 +681,7 @@ function TitleEditor({
       <label className="mt-2 block">
         <span className="flex items-center gap-1 text-xs text-gray-500">
           <Pencil className="h-3 w-3" />
-          Title text
+          Title
         </span>
         <input
           value={widget.label}
@@ -581,7 +691,168 @@ function TitleEditor({
           className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
         />
       </label>
+
+      <label className="mt-2 block">
+        <span className="text-xs text-gray-500">Subtitle</span>
+        <input
+          value={widget.subtitle}
+          onChange={(e) => onChange({ subtitle: e.target.value })}
+          placeholder="Optional subtitle"
+          className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+        />
+      </label>
     </div>
+  );
+}
+
+/** Shared chrome for an edit card: centered popover with a titled header that
+ *  carries the delete-with-confirm icon and a Done button. */
+function EditorCard({
+  title,
+  icon: Icon,
+  onRemove,
+  onClose,
+  children,
+}: {
+  title: string;
+  icon: typeof Heading;
+  onRemove: () => void;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="absolute left-1/2 top-1/2 z-10 w-72 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-200 bg-white p-3 shadow-float">
+      <div className="flex items-center justify-between">
+        <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <Icon className="h-3.5 w-3.5" />
+          {title}
+        </h4>
+        <div className="flex items-center gap-1">
+          <DeleteWithConfirm onRemove={onRemove} />
+          <button
+            type="button"
+            aria-label="Done"
+            onClick={onClose}
+            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const FIELD_CLASS =
+  "mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20";
+
+function TextEditor({
+  widget,
+  onChange,
+  onRemove,
+  onClose,
+}: {
+  widget: { text: string };
+  onChange: (patch: { text: string }) => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <EditorCard title="Text" icon={Type} onRemove={onRemove} onClose={onClose}>
+      <label className="mt-2 block">
+        <span className="flex items-center gap-1 text-xs text-gray-500">
+          <Pencil className="h-3 w-3" />
+          Body text
+        </span>
+        <textarea
+          value={widget.text}
+          onChange={(e) => onChange({ text: e.target.value })}
+          placeholder="Add some text here."
+          rows={3}
+          autoFocus
+          className={`${FIELD_CLASS} resize-none`}
+        />
+      </label>
+    </EditorCard>
+  );
+}
+
+function ImageEditor({
+  widget,
+  onChange,
+  onRemove,
+  onClose,
+}: {
+  widget: { url: string; alt: string };
+  onChange: (patch: Partial<{ url: string; alt: string }>) => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <EditorCard title="Image" icon={ImageIcon} onRemove={onRemove} onClose={onClose}>
+      <label className="mt-2 block">
+        <span className="text-xs text-gray-500">Image URL</span>
+        <input
+          value={widget.url}
+          onChange={(e) => onChange({ url: e.target.value })}
+          placeholder="https://example.com/photo.jpg"
+          inputMode="url"
+          autoFocus
+          className={FIELD_CLASS}
+        />
+      </label>
+
+      <label className="mt-2 block">
+        <span className="text-xs text-gray-500">Alt text</span>
+        <input
+          value={widget.alt}
+          onChange={(e) => onChange({ alt: e.target.value })}
+          placeholder="Describe the image"
+          className={FIELD_CLASS}
+        />
+      </label>
+
+      {widget.url && (
+        // eslint-disable-next-line @next/next/no-img-element -- arbitrary user URL, not a Next asset
+        <img
+          src={widget.url}
+          alt={widget.alt}
+          className="mt-2 h-24 w-full rounded-lg border border-gray-200 object-cover"
+        />
+      )}
+    </EditorCard>
+  );
+}
+
+function VideoEditor({
+  widget,
+  onChange,
+  onRemove,
+  onClose,
+}: {
+  widget: { url: string };
+  onChange: (patch: { url: string }) => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <EditorCard title="Video" icon={Video} onRemove={onRemove} onClose={onClose}>
+      <label className="mt-2 block">
+        <span className="text-xs text-gray-500">Video URL</span>
+        <input
+          value={widget.url}
+          onChange={(e) => onChange({ url: e.target.value })}
+          placeholder="https://youtube.com/watch?v=…"
+          inputMode="url"
+          autoFocus
+          className={FIELD_CLASS}
+        />
+      </label>
+      <p className="mt-1.5 text-xs text-gray-400">
+        Paste a YouTube or Vimeo link — it&apos;s embedded automatically.
+      </p>
+    </EditorCard>
   );
 }
 

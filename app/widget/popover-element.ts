@@ -27,6 +27,8 @@ import {
   emptyLayout,
   parseLayout,
   backgroundCss,
+  embedUrl,
+  contrastText,
   type Layout,
   type Widget,
 } from "../ui/widget-types";
@@ -81,33 +83,43 @@ export class BoxiiPopover extends LitElement {
       width: 100%;
       gap: 0.5rem;
       padding: 0.75rem;
-      border-radius: 1rem;
-      border: 1px solid rgba(16, 24, 40, 0.1);
+      border-radius: 1.5rem;
+      border: 1px solid color-mix(in srgb, var(--boxii-on) 12%, transparent);
       box-shadow:
-        0 1px 3px rgba(16, 24, 40, 0.05),
-        0 16px 32px -20px rgba(16, 24, 40, 0.22);
+        0 1px 3px rgba(16, 24, 40, 0.06),
+        0 28px 56px -28px rgba(16, 24, 40, 0.5);
     }
 
+    /* Frosted-glass card: a translucent veil over the canvas with a hairline
+       border, blur, and soft depth — sits on the gradient like the hero cards. */
     .cell {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      gap: 0.375rem;
+      gap: 0.25rem;
       min-width: 0;
-      padding: 0.5rem;
-      border-radius: 0.75rem;
-      text-align: center;
+      padding: 0.75rem;
+      border-radius: 1rem;
+      text-align: left;
       text-decoration: none;
-      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
-      background: var(--boxii-button, #4f46e5);
-      color: var(--boxii-label, #ffffff);
+      color: var(--boxii-on, #ffffff);
+      background: color-mix(in srgb, var(--boxii-on) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--boxii-on) 14%, transparent);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--boxii-on) 10%, transparent),
+        0 1px 2px rgba(16, 24, 40, 0.12);
     }
     a.cell {
-      transition: opacity 0.15s ease;
+      transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
     }
     a.cell:hover {
-      opacity: 0.9;
+      background: color-mix(in srgb, var(--boxii-on) 14%, transparent);
+      border-color: color-mix(in srgb, var(--boxii-on) 26%, transparent);
     }
 
     .label {
@@ -116,15 +128,79 @@ export class BoxiiPopover extends LitElement {
       -webkit-box-orient: vertical;
       overflow: hidden;
       overflow-wrap: anywhere;
-      line-height: 1.15;
+      line-height: 1.2;
+    }
+
+    /* Link → a row card: title on the left, an arrow affordance on the right. */
+    .cell.link {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
     }
     .cell.link .label {
-      font-size: 0.875rem;
+      font-size: 0.9rem;
       font-weight: 600;
     }
-    .cell.title {
-      font-size: 1.25rem;
-      font-weight: 700;
+    .cell.link .arrow {
+      opacity: 0.7;
+    }
+
+    /* Title → a serif hero heading. */
+    .cell.title .label {
+      font-family: ui-serif, Georgia, "Times New Roman", serif;
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.05;
+    }
+    .cell.title .subtitle {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      line-height: 1.25;
+      font-size: 0.8rem;
+      font-weight: 400;
+      opacity: 0.7;
+    }
+
+    .cell.text {
+      justify-content: flex-start;
+      font-size: 0.82rem;
+      font-weight: 400;
+      line-height: 1.4;
+    }
+    .cell.text .body {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      overflow: hidden;
+      opacity: 0.85;
+    }
+
+    /* Media widgets fill their cell edge-to-edge — keep the frame, drop the veil. */
+    .cell.media {
+      padding: 0;
+      background: transparent;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      overflow: hidden;
+    }
+    .cell.media img,
+    .cell.media iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      object-fit: cover;
+    }
+    .cell.placeholder {
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      font-size: 0.75rem;
+      opacity: 0.8;
     }
 
     svg.icon {
@@ -133,6 +209,11 @@ export class BoxiiPopover extends LitElement {
       flex-shrink: 0;
       opacity: 0.8;
       display: block;
+    }
+    .cell.link .arrow svg.icon {
+      width: 18px;
+      height: 18px;
+      opacity: 1;
     }
   `;
 
@@ -151,7 +232,7 @@ export class BoxiiPopover extends LitElement {
     return html`
       <div
         class="canvas"
-        style=${`${backgroundCss(theme)}--boxii-button:${theme.button};--boxii-label:${theme.label};grid-template-columns:repeat(${GRID_SIZE},minmax(0,1fr));grid-template-rows:repeat(${GRID_SIZE},minmax(0,1fr));`}
+        style=${`${backgroundCss(theme)}--boxii-button:${theme.button};--boxii-label:${theme.label};--boxii-on:${contrastText(theme.canvas)};grid-template-columns:repeat(${GRID_SIZE},minmax(0,1fr));grid-template-rows:repeat(${GRID_SIZE},minmax(0,1fr));`}
       >
         ${Array.from({ length: CELL_COUNT }, (_, cell) => {
           const widget = cells[cell];
@@ -165,29 +246,74 @@ export class BoxiiPopover extends LitElement {
   }
 
   private renderWidget(widget: Widget, placement: string) {
-    if (widget.type === "link") {
-      return html`
-        <a
-          class="cell link"
-          style=${placement}
-          href=${widget.url || "#"}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          ${this.linkIcon()}
-          <span class="label">${widget.label || "Link"}</span>
-        </a>
-      `;
+    switch (widget.type) {
+      case "link":
+        return html`
+          <a
+            class="cell link"
+            style=${placement}
+            href=${widget.url || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="label">${widget.label || "Link"}</span>
+            <span class="arrow">${this.arrowIcon()}</span>
+          </a>
+        `;
+      case "text":
+        return html`
+          <div class="cell text" style=${placement}>
+            <span class="body">${widget.text}</span>
+          </div>
+        `;
+      case "image":
+        return widget.url
+          ? html`
+              <div class="cell media" style=${placement}>
+                <img src=${widget.url} alt=${widget.alt} loading="lazy" />
+              </div>
+            `
+          : html`
+              <div class="cell placeholder" style=${placement}>
+                ${this.imageIcon()}
+                <span>Image</span>
+              </div>
+            `;
+      case "video": {
+        const src = embedUrl(widget.url);
+        return src
+          ? html`
+              <div class="cell media" style=${placement}>
+                <iframe
+                  src=${src}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen
+                  title="Embedded video"
+                ></iframe>
+              </div>
+            `
+          : html`
+              <div class="cell placeholder" style=${placement}>
+                ${this.videoIcon()}
+                <span>Video</span>
+              </div>
+            `;
+      }
+      case "title":
+      default:
+        return html`
+          <div class="cell title" style=${placement}>
+            <span class="label">${widget.label || "Your title"}</span>
+            ${widget.subtitle
+              ? html`<span class="subtitle">${widget.subtitle}</span>`
+              : nothing}
+          </div>
+        `;
     }
-    return html`
-      <div class="cell title" style=${placement}>
-        <span class="label">${widget.label || "Your title"}</span>
-      </div>
-    `;
   }
 
-  /** Inlined lucide "link-2" so the shadow root needs no extra requests. */
-  private linkIcon() {
+  /** Inlined lucide "arrow-up-right" — the link card's go-to affordance. */
+  private arrowIcon() {
     return html`<svg
       class="icon"
       viewBox="0 0 24 24"
@@ -198,7 +324,39 @@ export class BoxiiPopover extends LitElement {
       stroke-linejoin="round"
       aria-hidden="true"
     >
-      ${svg`<path d="M9 17H7A5 5 0 0 1 7 7h2" /><path d="M15 7h2a5 5 0 1 1 0 10h-2" /><line x1="8" x2="16" y1="12" y2="12" />`}
+      ${svg`<path d="M7 7h10v10" /><path d="M7 17 17 7" />`}
+    </svg>`;
+  }
+
+  /** Inlined lucide "image" placeholder icon. */
+  private imageIcon() {
+    return html`<svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      ${svg`<rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />`}
+    </svg>`;
+  }
+
+  /** Inlined lucide "video" placeholder icon. */
+  private videoIcon() {
+    return html`<svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      ${svg`<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" /><rect x="2" y="6" width="14" height="12" rx="2" />`}
     </svg>`;
   }
 }

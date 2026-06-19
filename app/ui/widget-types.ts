@@ -11,16 +11,27 @@ export const DND_MOVE_CELL = "application/x-boxii-move";
 export const DND_SPAN2 = "application/x-boxii-span-2";
 
 export type LinkWidget = { type: "link"; label: string; url: string };
-export type TitleWidget = { type: "title"; label: string };
+export type TitleWidget = { type: "title"; label: string; subtitle: string };
+export type TextWidget = { type: "text"; text: string };
+export type ImageWidget = { type: "image"; url: string; alt: string };
+export type VideoWidget = { type: "video"; url: string };
 
 /** Discriminated union of every placeable widget. */
-export type Widget = LinkWidget | TitleWidget;
+export type Widget = LinkWidget | TitleWidget | TextWidget | ImageWidget | VideoWidget;
 
 export type WidgetType = Widget["type"];
 
+/** Widget types that occupy two grid columns (anchored at their top-left cell). */
+const WIDE_WIDGETS: ReadonlySet<WidgetType> = new Set<WidgetType>([
+  "title",
+  "text",
+  "image",
+  "video",
+]);
+
 /** How many grid columns a widget occupies (anchored at its top-left cell). */
 export function widgetSpan(type: WidgetType): number {
-  return type === "title" ? 2 : 1;
+  return WIDE_WIDGETS.has(type) ? 2 : 1;
 }
 
 export const colOf = (cell: number) => cell % GRID_SIZE;
@@ -198,11 +209,28 @@ export function parseLayout(raw: unknown, brandColors: string[] = []): Layout {
     for (const [key, value] of Object.entries(obj.cells as Record<string, unknown>)) {
       const idx = Number(key);
       if (!Number.isInteger(idx) || idx < 0 || idx >= CELL_COUNT) continue;
-      const w = value as { type?: string; label?: unknown; url?: unknown };
+      const w = value as {
+        type?: string;
+        label?: unknown;
+        url?: unknown;
+        subtitle?: unknown;
+        text?: unknown;
+        alt?: unknown;
+      };
       if (w && w.type === "link") {
         cells[idx] = { type: "link", label: String(w.label ?? ""), url: String(w.url ?? "") };
       } else if (w && w.type === "title") {
-        cells[idx] = { type: "title", label: String(w.label ?? "") };
+        cells[idx] = {
+          type: "title",
+          label: String(w.label ?? ""),
+          subtitle: String(w.subtitle ?? ""),
+        };
+      } else if (w && w.type === "text") {
+        cells[idx] = { type: "text", text: String(w.text ?? "") };
+      } else if (w && w.type === "image") {
+        cells[idx] = { type: "image", url: String(w.url ?? ""), alt: String(w.alt ?? "") };
+      } else if (w && w.type === "video") {
+        cells[idx] = { type: "video", url: String(w.url ?? "") };
       }
     }
   }
@@ -230,6 +258,27 @@ export function defaultWidget(type: WidgetType): Widget {
     case "link":
       return { type: "link", label: "Click here", url: "https://" };
     case "title":
-      return { type: "title", label: "Your title" };
+      return { type: "title", label: "Your title", subtitle: "" };
+    case "text":
+      return { type: "text", text: "Add some text here." };
+    case "image":
+      return { type: "image", url: "", alt: "" };
+    case "video":
+      return { type: "video", url: "" };
   }
+}
+
+/** Normalise common share URLs (YouTube/Vimeo) into an embeddable iframe src.
+ *  Returns the input unchanged when it already looks embeddable or unknown. */
+export function embedUrl(url: string): string {
+  const u = url.trim();
+  if (!u) return "";
+  // youtu.be/<id> or youtube.com/watch?v=<id>
+  const yt =
+    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/.exec(u);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  // vimeo.com/<id>
+  const vimeo = /vimeo\.com\/(?:video\/)?(\d+)/.exec(u);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  return u;
 }

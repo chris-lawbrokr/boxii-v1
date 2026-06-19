@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2, Heading } from "lucide-react";
+import { Link2, Heading, Type, Image as ImageIcon, Video } from "lucide-react";
 import { DND_NEW_WIDGET, DND_SPAN2, widgetSpan, type WidgetType } from "./widget-types";
 
 type PaletteEntry = {
@@ -12,6 +12,9 @@ type PaletteEntry = {
 const PALETTE: PaletteEntry[] = [
   { type: "link", label: "Link", icon: Link2 },
   { type: "title", label: "Title", icon: Heading },
+  { type: "text", label: "Text", icon: Type },
+  { type: "image", label: "Image", icon: ImageIcon },
+  { type: "video", label: "Video", icon: Video },
 ];
 
 /** Draggable widget palette for the config-editor sidebar. Drag an entry onto
