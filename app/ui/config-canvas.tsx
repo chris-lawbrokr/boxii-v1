@@ -8,7 +8,6 @@ import {
   Trash2,
   Check,
   ExternalLink,
-  Palette,
   Type,
   Image as ImageIcon,
   Video,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { saveConfigLayoutAction } from "@/app/lib/project-actions";
 import { PopoverPreview } from "./popover-preview";
+import { useConfigStore, updateLayout } from "./config-store";
 import {
   CELL_COUNT,
   DND_MOVE_CELL,
@@ -29,10 +29,8 @@ import {
   widgetSpan,
   backgroundCss,
   contrastText,
-  PATTERNS,
-  type BgStyle,
+  cssTextToStyle,
   type Layout,
-  type Theme,
   type Widget,
   type WidgetType,
 } from "./widget-types";
@@ -51,11 +49,11 @@ export function ConfigCanvas({
   brandColors: string[];
   preview: boolean;
 }) {
-  const [layout, setLayout] = useState<Layout>(initialLayout);
+  // Layout lives in the shared editor store so the sidebar's theme editor (a
+  // separate route slot) and this canvas edit the same source of truth.
+  const { layout } = useConfigStore(configId, initialLayout, brandColors);
   const [selected, setSelected] = useState<number | null>(null);
   const [dragCells, setDragCells] = useState<number[]>([]);
-  const [themeOpen, setThemeOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   // Debounced persistence — skip the very first render (no change yet).
   const firstRun = useRef(true);
@@ -64,16 +62,14 @@ export function ConfigCanvas({
       firstRun.current = false;
       return;
     }
-    setSaving(true);
-    const t = setTimeout(async () => {
-      await saveConfigLayoutAction(configId, layout as unknown as Record<string, unknown>);
-      setSaving(false);
+    const t = setTimeout(() => {
+      void saveConfigLayoutAction(configId, layout as unknown as Record<string, unknown>);
     }, 500);
     return () => clearTimeout(t);
   }, [layout, configId]);
 
   const placeNew = useCallback((cell: number, type: WidgetType) => {
-    setLayout((prev) => {
+    updateLayout((prev) => {
       const anchor = fitAnchor(prev.cells, cell, widgetSpan(type));
       if (anchor === null) return prev; // doesn't fit here
       return { ...prev, cells: { ...prev.cells, [anchor]: defaultWidget(type) } };
@@ -82,7 +78,7 @@ export function ConfigCanvas({
 
   const moveWidget = useCallback((from: number, to: number) => {
     if (from === to) return;
-    setLayout((prev) => {
+    updateLayout((prev) => {
       const moving = prev.cells[from];
       if (!moving) return prev;
       const cells = { ...prev.cells };
@@ -99,7 +95,7 @@ export function ConfigCanvas({
       cell: number,
       patch: Partial<{ label: string; url: string; subtitle: string; text: string; alt: string }>,
     ) => {
-      setLayout((prev) => {
+      updateLayout((prev) => {
         const existing = prev.cells[cell];
         if (!existing) return prev;
         return { ...prev, cells: { ...prev.cells, [cell]: { ...existing, ...patch } } };
@@ -109,16 +105,12 @@ export function ConfigCanvas({
   );
 
   const removeWidget = useCallback((cell: number) => {
-    setLayout((prev) => {
+    updateLayout((prev) => {
       const cells = { ...prev.cells };
       delete cells[cell];
       return { ...prev, cells };
     });
     setSelected((s) => (s === cell ? null : s));
-  }, []);
-
-  const updateTheme = useCallback((patch: Partial<Theme>) => {
-    setLayout((prev) => ({ ...prev, theme: { ...prev.theme, ...patch } }));
   }, []);
 
   // Which cells a drop over `target` would occupy, given the in-flight span.
@@ -167,32 +159,6 @@ export function ConfigCanvas({
 
   return (
     <div className="relative h-full w-full">
-      {/* Toolbar above the canvas */}
-      <div className="absolute -top-8 left-0 right-0 flex items-center justify-between">
-        {preview ? (
-          <span />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setThemeOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
-          >
-            <Palette className="h-3.5 w-3.5" />
-            Theme
-          </button>
-        )}
-        {!preview && <span className="text-xs text-gray-400">{saving ? "Saving…" : "Saved"}</span>}
-      </div>
-
-      {!preview && themeOpen && (
-        <ThemeEditor
-          theme={theme}
-          brandColors={brandColors}
-          onChange={updateTheme}
-          onClose={() => setThemeOpen(false)}
-        />
-      )}
-
       {/* Preview renders the REAL shippable Lit <boxii-popover> element, so what
           you preview is exactly what the embed ships. Edit mode keeps a React
           grid for drag-and-drop authoring. */}
@@ -401,210 +367,6 @@ function WidgetCellBody({ widget }: { widget: Widget }) {
         </div>
       );
   }
-}
-
-function ThemeEditor({
-  theme,
-  brandColors,
-  onChange,
-  onClose,
-}: {
-  theme: Theme;
-  brandColors: string[];
-  onChange: (patch: Partial<Theme>) => void;
-  onClose: () => void;
-}) {
-  const bgStyles: { id: BgStyle; label: string }[] = [
-    { id: "solid", label: "Solid" },
-    { id: "gradient", label: "Gradient" },
-    { id: "pattern", label: "Pattern" },
-  ];
-
-  return (
-    <div className="absolute left-0 top-1 z-20 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-float">
-      <div className="flex items-center justify-between">
-        <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-          <Palette className="h-3.5 w-3.5" />
-          Configuration theme
-        </h4>
-        <button
-          type="button"
-          aria-label="Done"
-          onClick={onClose}
-          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <Check className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <p className="mt-1 text-xs text-gray-400">Defaults to this site&apos;s brand colours.</p>
-
-      {/* ---- Background ---- */}
-      <div className="mt-3 border-t border-gray-100 pt-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Background
-          </span>
-          {/* Live preview of the chosen background */}
-          <span
-            className="h-6 w-12 rounded-md border border-gray-200"
-            style={cssTextToStyle(backgroundCss(theme))}
-            aria-hidden
-          />
-        </div>
-
-        {/* Style toggle: solid / gradient / pattern */}
-        <div className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-0.5">
-          {bgStyles.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onChange({ bgStyle: s.id })}
-              className={`rounded-md px-2 py-1 text-xs font-medium transition ${
-                theme.bgStyle === s.id
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        <ColorRow
-          label={theme.bgStyle === "solid" ? "Colour" : "Base"}
-          colorKey="canvas"
-          theme={theme}
-          brandColors={brandColors}
-          onChange={onChange}
-        />
-        {theme.bgStyle !== "solid" && (
-          <ColorRow
-            label={theme.bgStyle === "gradient" ? "Gradient to" : "Pattern"}
-            colorKey="canvas2"
-            theme={theme}
-            brandColors={brandColors}
-            onChange={onChange}
-          />
-        )}
-
-        {theme.bgStyle === "pattern" && (
-          <div className="mt-2 grid grid-cols-4 gap-1.5">
-            {PATTERNS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => onChange({ pattern: p })}
-                aria-label={`${p} pattern`}
-                title={p}
-                style={cssTextToStyle(
-                  backgroundCss({ ...theme, bgStyle: "pattern", pattern: p }),
-                )}
-                className={`h-8 rounded-md border ${
-                  theme.pattern === p
-                    ? "border-gray-900 ring-1 ring-gray-900"
-                    : "border-gray-200"
-                }`}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ---- Widgets ---- */}
-      <div className="mt-3 border-t border-gray-100 pt-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Widgets</span>
-        <ColorRow
-          label="Button"
-          colorKey="button"
-          theme={theme}
-          brandColors={brandColors}
-          onChange={onChange}
-        />
-        <ColorRow
-          label="Text"
-          colorKey="label"
-          theme={theme}
-          brandColors={brandColors}
-          onChange={onChange}
-        />
-      </div>
-    </div>
-  );
-}
-
-/** Convert a CSS-text declaration string (e.g. "background:#fff;") into a React
- *  style object so editor swatches reuse the exact same paint as the widget. */
-function cssTextToStyle(cssText: string): React.CSSProperties {
-  const style: Record<string, string> = {};
-  for (const decl of cssText.split(";")) {
-    const idx = decl.indexOf(":");
-    if (idx === -1) continue;
-    const prop = decl.slice(0, idx).trim();
-    const value = decl.slice(idx + 1).trim();
-    if (!prop) continue;
-    // camelCase the CSS property for React.
-    const camel = prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
-    style[camel] = value;
-  }
-  return style as React.CSSProperties;
-}
-
-/** A single colour control: hex picker + brand-palette swatches, bound to one
- *  Theme colour key. */
-function ColorRow({
-  label,
-  colorKey,
-  theme,
-  brandColors,
-  onChange,
-}: {
-  label: string;
-  colorKey: "canvas" | "canvas2" | "button" | "label";
-  theme: Theme;
-  brandColors: string[];
-  onChange: (patch: Partial<Theme>) => void;
-}) {
-  const value = theme[colorKey];
-  return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-600">{label}</span>
-        <label className="flex items-center gap-1.5">
-          <span className="font-mono text-[11px] text-gray-400">{value}</span>
-          <input
-            type="color"
-            value={normalizeHex(value)}
-            onChange={(e) => onChange({ [colorKey]: e.target.value })}
-            className="h-5 w-5 cursor-pointer rounded border border-gray-200 bg-transparent p-0"
-            aria-label={`${label} colour`}
-          />
-        </label>
-      </div>
-      {brandColors.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {brandColors.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onChange({ [colorKey]: c })}
-              aria-label={`Use ${c}`}
-              style={{ backgroundColor: c }}
-              className={`h-5 w-5 rounded border ${
-                value.toLowerCase() === c.toLowerCase()
-                  ? "border-gray-900 ring-1 ring-gray-900"
-                  : "border-gray-200"
-              }`}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** <input type=color> needs a #rrggbb value; coerce anything else to black. */
-function normalizeHex(hex: string): string {
-  return /^#[0-9a-f]{6}$/i.test(hex.trim()) ? hex.trim() : "#000000";
 }
 
 /** Small trash icon (sits in an edit card's header beside Done) that asks for

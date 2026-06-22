@@ -22,7 +22,6 @@ export default async function ConfigEditorPage({
       configId={config.id}
       projectId={project.id}
       name={config.name}
-      status={config.status}
       brandColors={brandColors}
       initialLayout={parseLayout(config.config, brandColors)}
     />

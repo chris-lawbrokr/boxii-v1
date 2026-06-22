@@ -2,21 +2,18 @@
 
 import { useState } from "react";
 import { Pencil, Check, X } from "lucide-react";
-import { StatusBadge } from "./status-badge";
 import { renameConfigurationAction } from "@/app/lib/project-actions";
 
 /** Editor-page title: the configuration name as a large heading with an inline
- *  rename toggle, plus the status badge. */
+ *  rename toggle. */
 export function ConfigTitle({
   configId,
   projectId,
   name,
-  status,
 }: {
   configId: string;
   projectId: string;
   name: string;
-  status: string;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -55,7 +52,6 @@ export function ConfigTitle({
   return (
     <div className="flex items-center gap-2">
       <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">{name}</h1>
-      <StatusBadge status={status} />
       <button
         type="button"
         aria-label="Rename configuration"

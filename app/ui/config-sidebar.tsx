@@ -2,10 +2,12 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/app/lib/dal";
 import { getConfigurationForUser } from "@/app/lib/db/configurations";
-import { WidgetPalette } from "./widget-palette";
+import { ThemePanel } from "./theme-panel";
+import { parseLayout } from "./widget-types";
 
 /** Sidebar slot inside the configuration editor — a config-specific panel: back
- *  link to Configurations, the config header, and the draggable widget palette. */
+ *  link to Configurations, the config header, and a toggle between the
+ *  draggable widget palette and the configuration's theme editor. */
 export async function ConfigSidebar({ id, configId }: { id: string; configId: string }) {
   const user = await requireUser("/login");
   const found = await getConfigurationForUser(configId, user.id);
@@ -24,7 +26,8 @@ export async function ConfigSidebar({ id, configId }: { id: string; configId: st
     );
   }
 
-  const { config } = found;
+  const { config, project } = found;
+  const brandColors = project.brandIdentity?.colors ?? [];
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -39,12 +42,11 @@ export async function ConfigSidebar({ id, configId }: { id: string; configId: st
         </Link>
       </div>
 
-      <div>
-        <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Widgets
-        </h3>
-        <WidgetPalette />
-      </div>
+      <ThemePanel
+        configId={configId}
+        initialLayout={parseLayout(config.config, brandColors)}
+        brandColors={brandColors}
+      />
     </div>
   );
 }

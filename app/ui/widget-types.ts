@@ -1,5 +1,7 @@
 /** Shared types for the popover builder. The grid is 4×4 (16 cells, 0-15). */
 
+import type { CSSProperties } from "react";
+
 export const GRID_SIZE = 4;
 export const CELL_COUNT = GRID_SIZE * GRID_SIZE;
 
@@ -138,6 +140,23 @@ export function backgroundCss(theme: Theme): string {
     default:
       return `background:${theme.canvas};`;
   }
+}
+
+/** Convert a CSS-text declaration string (e.g. "background:#fff;") into a React
+ *  style object so editor swatches reuse the exact same paint as the widget. */
+export function cssTextToStyle(cssText: string): CSSProperties {
+  const style: Record<string, string> = {};
+  for (const decl of cssText.split(";")) {
+    const idx = decl.indexOf(":");
+    if (idx === -1) continue;
+    const prop = decl.slice(0, idx).trim();
+    const value = decl.slice(idx + 1).trim();
+    if (!prop) continue;
+    // camelCase the CSS property for React.
+    const camel = prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+    style[camel] = value;
+  }
+  return style as CSSProperties;
 }
 
 /** Persisted layout: a map of cell index (0-15) → widget, plus a theme. */
